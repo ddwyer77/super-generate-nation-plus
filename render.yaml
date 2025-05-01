@@ -1,0 +1,16 @@
+services:
+  - name: grainify-worker
+    type: web_service
+    env: docker
+    dockerfilePath: render_worker/Dockerfile
+    branch: main
+    plan: starter
+    regions:
+      - oregon
+    buildCommand: "pip3 install --no-cache-dir -r render_worker/requirements.txt"
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port 8080"
+    envVars:
+      - key: SUPABASE_URL
+        fromEnvVar: SUPABASE_URL
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        fromEnvVar: SUPABASE_SERVICE_ROLE_KEY 

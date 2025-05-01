@@ -1,0 +1,12 @@
+{
+  "image": {
+    "id": "288116369351.dkr.ecr.us-west-1.amazonaws.com/grainifier-edge-function:latest"
+  },
+  "exec": {
+    "command": ["/usr/bin/deno", "run", "--allow-net", "--allow-env", "--allow-read", "--allow-write", "--allow-run", "./index.ts"]
+  },
+  "resources": {
+    "memory": "512MiB",
+    "cpu": 500
+  }
+} 

@@ -1,0 +1,60 @@
+# Fix for Row-Level Security Error in Grainify Function
+
+I'm getting a "new row violates row-level security policy" error when my Edge Function tries to insert data into the generated_media table. Please help me fix this issue.
+
+## Background
+- I have a Supabase Edge Function called "grainify" that processes videos
+- The function is using the service role key to connect to Supabase
+- The function needs to insert records into the `generated_media` table
+- I'm getting RLS policy violations when inserting
+
+## Please implement one of these solutions:
+
+### Option 1: Enable service role bypass for the table
+Confirm that service roles can bypass RLS. Navigate to Authentication > Policies in the dashboard and ensure that while RLS is enabled for the `generated_media` table, service roles can bypass it.
+
+### Option 2: Create a policy that allows inserts
+Execute this SQL:
+
+```sql
+CREATE POLICY "Allow service role to insert generated_media"
+ON "public"."generated_media"
+FOR INSERT
+USING (true);
+```
+
+### Option 3: Add a policy for authenticated users
+Execute this SQL:
+
+```sql
+CREATE POLICY "Enable insert for authenticated users only" 
+ON "public"."generated_media"
+FOR INSERT 
+TO authenticated
+WITH CHECK (auth.uid() = user_id);
+```
+
+### Option 4: Temporarily disable RLS for testing
+Execute this SQL (only for testing, not for production):
+
+```sql
+ALTER TABLE "public"."generated_media" DISABLE ROW LEVEL SECURITY;
+```
+
+### Option 5: Verify the table structure
+Ensure the `generated_media` table has the correct columns:
+
+```sql
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_schema = 'public' 
+AND table_name = 'generated_media';
+```
+
+Expected columns:
+- `user_id` (uuid)
+- `url` (text)
+- `type` (text)
+- Any other columns like `id`, `created_at`, etc.
+
+Please implement the most appropriate solution based on my project's security requirements. 

@@ -55,6 +55,13 @@ export default function Home() {
 
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
   const [grainLoading, setGrainLoading] = useState(false);
+  const [uploadedVideoFile, setUploadedVideoFile] = useState<File | null>(null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+
+  const [grain, setGrain] = useState(0.6);
+  const [contrast, setContrast] = useState(2.2);
+  const [glitch, setGlitch] = useState(0.3);
+  const [scan, setScan] = useState(0.2);
 
   useEffect(() => {
     // Initialize session
@@ -89,6 +96,11 @@ export default function Home() {
       .then(res => res.json())
       .then(data => data.url && setLogoUrl(data.url))
       .catch(err => console.error('Error fetching logo URL:', err));
+      
+    // Create necessary storage buckets
+    fetch('/api/create-bucket', { method: 'POST' })
+      .then(res => res.json())
+      .catch(err => console.error('Error creating buckets:', err));
   }, []);
 
   const handleImageSubmit = async (e: React.FormEvent) => {
@@ -411,19 +423,118 @@ export default function Home() {
             {/* Grainifier Module */}
             <section className="bg-white/10 backdrop-blur-sm p-6 rounded-2xl shadow-lg border border-gray-700">
               <h2 className="text-2xl font-bold text-yellow-300 mb-4">Grainifier</h2>
+              
+              {/* Video upload form added here */}
+              <div className="mb-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
+                <h3 className="text-lg font-semibold text-purple-300 mb-2">Upload Video</h3>
+                <p className="text-gray-400 text-sm mb-3">Upload a video to apply grain and glitch effects.</p>
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={(e) => setUploadedVideoFile(e.target.files?.[0] || null)}
+                  className="bg-gray-900 border border-gray-600 rounded-full px-4 py-2 text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500 transition w-full mb-3"
+                />
+                {uploadedVideoFile && (
+                  <div className="flex flex-col">
+                    <p className="text-sm text-gray-300 mb-2">Selected: {uploadedVideoFile.name}</p>
+                    <video 
+                      src={URL.createObjectURL(uploadedVideoFile)} 
+                      controls 
+                      className="rounded-lg border border-gray-700 mb-3 max-h-60"
+                    />
+                    <button 
+                      disabled={uploadingVideo || !session} 
+                      onClick={async () => {
+                        if (!session) { alert('Please sign in'); return; }
+                        if (!uploadedVideoFile) return;
+
+                        setUploadingVideo(true);
+                        try {
+                          // Create FormData and upload to Supabase storage
+                          const formData = new FormData();
+                          formData.append('file', uploadedVideoFile);
+                          
+                          // Upload to videos bucket
+                          const fileName = `upload_${Date.now()}_${uploadedVideoFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+                          const { error } = await supabaseBrowser.storage
+                            .from('videos')
+                            .upload(fileName, uploadedVideoFile);
+                            
+                          if (error) throw error;
+                          
+                          // Get public URL
+                          const { data: { publicUrl } } = supabaseBrowser.storage
+                            .from('videos')
+                            .getPublicUrl(fileName);
+                            
+                          // Add to media table
+                          await supabaseBrowser.from('generated_media')
+                            .insert({ user_id: session.user.id, url: publicUrl, type: 'video' });
+                            
+                          // Update videos and set as selected
+                          setLibraryVideos(prev => [publicUrl, ...prev]);
+                          setSelectedVideo(publicUrl);
+                          setUploadedVideoFile(null);
+                          
+                        } catch (err) {
+                          alert((err as Error).message);
+                        } finally {
+                          setUploadingVideo(false);
+                        }
+                      }}
+                      className="bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded"
+                    >
+                      {uploadingVideo ? 'Uploading...' : 'Upload & Process'}
+                    </button>
+                  </div>
+                )}
+              </div>
+              
               {selectedVideo ? (
                 <>
                   <video src={selectedVideo} controls className="rounded-lg border border-gray-700 mb-4 w-full" />
+                  {/* Parameter sliders */}
+                  <div className="space-y-2 mb-4">
+                    <label className="block text-sm">Grain: {grain.toFixed(2)}
+                      <input type="range" min="0" max="1" step="0.05" value={grain} onChange={e=>setGrain(parseFloat(e.target.value))} className="w-full" />
+                    </label>
+                    <label className="block text-sm">Contrast: {contrast.toFixed(1)}
+                      <input type="range" min="1" max="4" step="0.1" value={contrast} onChange={e=>setContrast(parseFloat(e.target.value))} className="w-full" />
+                    </label>
+                    <label className="block text-sm">Glitch: {glitch.toFixed(2)}
+                      <input type="range" min="0" max="1" step="0.05" value={glitch} onChange={e=>setGlitch(parseFloat(e.target.value))} className="w-full" />
+                    </label>
+                    <label className="block text-sm">Scan Lines: {scan.toFixed(2)}
+                      <input type="range" min="0" max="1" step="0.05" value={scan} onChange={e=>setScan(parseFloat(e.target.value))} className="w-full" />
+                    </label>
+                  </div>
                   <button disabled={grainLoading} onClick={async ()=>{
                     if(!session) { alert('Please sign in'); return; }
                     setGrainLoading(true);
                     try {
-                      const res = await fetch('/api/grainify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url: selectedVideo, userId: session.user.id }) });
-                      const data = await res.json();
-                      if(!res.ok) throw new Error(data.error||'Error');
-                      setLibraryVideos(prev=>[data.url, ...prev]);
-                      setSelectedVideo(data.url);
-                    } catch(err: unknown){ alert((err as Error).message); }
+                      const { data, error } = await supabaseBrowser.functions.invoke('grainify', { 
+                        body: { url: selectedVideo, userId: session.user.id, grain, contrast, glitch, scan }
+                      });
+                      
+                      console.log('Grainify response:', { data, error });
+                      
+                      if(error) throw error;
+                      if(!data?.url) throw new Error('No URL returned');
+                      setLibraryVideos(prev=>[data.url as string, ...prev]);
+                      setSelectedVideo(data.url as string);
+                    } catch(err: unknown){ 
+                      console.error('Grainify error:', err);
+                      const errorMessage = err instanceof Error ? err.message : String(err);
+                      // Add to error logs
+                      const id = uuidv4();
+                      const time = new Date().toLocaleString();
+                      setErrorLogs(prev => [...prev, { 
+                        id, flow: 'video', time, 
+                        message: `Grainify failed: ${errorMessage}`,
+                        details: err
+                      }]);
+                      alert(errorMessage); 
+                    }
                     finally{ setGrainLoading(false);}  
                   }} className="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded">
                     {grainLoading? 'Grainifying...' : 'Grainify It'}

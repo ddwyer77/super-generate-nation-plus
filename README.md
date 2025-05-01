@@ -1,4 +1,59 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Super Generate Nation Plus
+
+A media generation application with image and video creation capabilities powered by Supabase and Replicate's AI models.
+
+## Grainifier Module with Custom Docker Container
+
+To deploy the grainifier Edge Function with Python and FFmpeg, follow these steps:
+
+1. **Build and setup the container configuration:**
+
+```bash
+# Ensure Docker is running locally
+docker --version
+
+# Build the Docker image defined in build/Dockerfile
+cd supabase/functions/grainify
+docker build -t grainifier-edge-function -f build/Dockerfile .
+```
+
+2. **Set up your Supabase project for containerized functions:**
+
+This requires the Supabase Pro plan with the Container Functions feature. You'll need to update your project settings in the Supabase dashboard to enable container functions.
+
+3. **Deploy the containerized Edge Function:**
+
+```bash
+# Deploy using the container.json configuration
+supabase functions deploy grainify --project-ref YOUR_PROJECT_REF --no-verify-jwt
+
+# Test the function
+curl -H "Content-Type: application/json" \
+     -d '{"url":"https://example.com/video.mp4", "userId":"test"}' \
+     "https://YOUR_PROJECT_REF.supabase.co/functions/v1/grainify"
+```
+
+4. **Using the Function through the UI:**
+
+The front-end application already includes integration with the grainifier Edge Function. Just sign in, upload a video, and use the "Grainify It" button to apply effects.
+
+## Features
+
+- Image generation using Replicate's Flux model
+- Video generation using Kling model 
+- User authentication and media library
+- Grainifier module for applying retro effects to videos
+- Direct video upload capabilities
+
+## Development
+
+```bash
+# Install dependencies
+npm install
+
+# Run the development server with environment variables
+doppler run -- npm run dev
+```
 
 ## Getting Started
 
